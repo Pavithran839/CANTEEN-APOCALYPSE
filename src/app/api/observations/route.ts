@@ -142,6 +142,32 @@ export async function POST(request: NextRequest) {
       ]
     );
 
+    
+    // Generate an alert for serious crowd conditions
+    //This creates an alert automatically when the Chaos Score is 51 or higher. LOW and MODERATE observations won't generate alerts.
+    if (chaosScore >= 51) {
+      const severity = chaosScore >= 76 ? "CRITICAL" : "HIGH";
+
+      const message =
+        severity === "CRITICAL"
+          ? "Critical crowd congestion detected! Immediate attention required."
+          : "High crowd congestion detected. Please monitor the canteen.";
+
+      await pool.execute(
+        `INSERT INTO alerts
+          (canteen_id, observation_id, alert_type, severity, message)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          canteen_id,
+          result.insertId,
+          "CROWD_CONGESTION",
+          severity,
+          message,
+        ]
+      );
+    }
+
+
     return NextResponse.json(
       {
         status: "success",
