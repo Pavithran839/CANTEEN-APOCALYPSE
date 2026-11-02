@@ -1,6 +1,8 @@
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { ResultSetHeader, RowDataPacket } from "mysql2";
 import pool from "@/lib/mysql";
+import { calculateChaosScore } from "@/lib/chaos-score";
 
 // GET: Retrieve all crowd observations
 export async function GET() {
@@ -30,3 +32,143 @@ export async function GET() {
     );
   }
 }
+
+// POST: Submit a new crowd observation
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    const {
+      canteen_id,
+      counter_id,
+      reported_by,
+      people_count,
+      queue_length,
+      wait_time_minutes,
+    } = body;
+
+    // Validate required IDs
+    if (
+      !Number.isInteger(canteen_id) ||
+      !Number.isInteger(reported_by) ||
+      (counter_id != null && !Number.isInteger(counter_id))
+    ) {
+      return NextResponse.json(
+        { message: "Invalid canteen, counter, or user ID." },
+        { status: 400 }
+      );
+    }
+
+    // Validate crowd values
+    if (
+      !Number.isFinite(people_count) ||
+      !Number.isFinite(queue_length) ||
+      !Number.isFinite(wait_time_minutes) ||
+      people_count < 0 ||
+      queue_length < 0 ||
+      wait_time_minutes < 0
+    ) {
+      return NextResponse.json(
+        { message: "Crowd values must be valid non-negative numbers." },
+        { status: 400 }
+      );
+    }
+
+    // Get canteen capacity
+    const [canteens] = await pool.query<RowDataPacket[]>(
+      "SELECT capacity FROM canteens WHERE canteen_id = ?",
+      [canteen_id]
+    );
+
+    if (canteens.length === 0) {
+      return NextResponse.json(
+        { message: "Canteen not found." },
+        { status: 404 }
+      );
+    }
+
+    const capacity = Number(canteens[0].capacity);
+
+    // Verify reporting user
+    const [users] = await pool.query<RowDataPacket[]>(
+      "SELECT user_id FROM users WHERE user_id = ?",
+      [reported_by]
+    );
+
+    if (users.length === 0) {
+      return NextResponse.json(
+        { message: "Reporting user not found." },
+        { status: 404 }
+      );
+    }
+
+    // Verify counter belongs to the selected canteen
+    if (counter_id != null) {
+      const [counters] = await pool.query<RowDataPacket[]>(
+        "SELECT counter_id FROM counters WHERE counter_id = ? AND canteen_id = ?",
+        [counter_id, canteen_id]
+      );
+
+      if (counters.length === 0) {
+        return NextResponse.json(
+          { message: "Counter not found for this canteen." },
+          { status: 404 }
+        );
+      }
+    }
+
+    // Calculate Chaos Score
+    const chaosScore = calculateChaosScore(
+      people_count,
+      queue_length,
+      wait_time_minutes,
+      capacity
+    );
+
+    // Save observation in MySQL
+    const [result] = await pool.execute<ResultSetHeader>(
+      `INSERT INTO observations
+        (canteen_id, counter_id, reported_by, people_count,
+         queue_length, wait_time_minutes, chaos_score)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        canteen_id,
+        counter_id ?? null,
+        reported_by,
+        people_count,
+        queue_length,
+        wait_time_minutes,
+        chaosScore,
+      ]
+    );
+
+    return NextResponse.json(
+      {
+        status: "success",
+        message: "Crowd observation submitted successfully.",
+        data: {
+          observation_id: result.insertId,
+          chaos_score: chaosScore,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Error submitting observation:", error);
+
+    return NextResponse.json(
+      { message: "Failed to submit crowd observation." },
+      { status: 500 }
+    );
+  }
+}
+//Accepts and saves crowd observation
+//This will allow the website to submit crowd reports 
+// and save them in MySQL.
+/*
+What we're adding:
+- Accepts crowd information through a POST request.
+- Checks whether the canteen, user and optional counter exist.
+- Calculates the Chaos Score using our existing function.
+- Saves the observation and calculated score in MySQL.
+*/
