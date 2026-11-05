@@ -1,9 +1,19 @@
-
 import { NextResponse } from "next/server";
 import pool from "@/lib/mysql";
+import { getSession } from "@/lib/auth";
 
 export async function GET() {
   try {
+    // Check whether the student is logged in
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { message: "Please log in to view analytics." },
+        { status: 401 }
+      );
+    }
+
     // Overall crowd statistics
     const [summary]: any = await pool.query(`
       SELECT
@@ -15,7 +25,7 @@ export async function GET() {
       FROM observations
     `);
 
-    // Canteen-wise daily statistics from the existing view
+    // Canteen-wise daily statistics
     const [canteenStats] = await pool.query(`
       SELECT *
       FROM canteen_daily_summary
@@ -36,4 +46,3 @@ export async function GET() {
     );
   }
 }
-//This API uses your existing SQL view and calculates overall statistics directly from observations.

@@ -1,9 +1,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
+import { getSession } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { message: "Please log in to view feedback." },
+        { status: 401 }
+      );
+    }
+
     const client = await clientPromise;
     const db = client.db(
       process.env.MONGODB_DB || "canteen_apocalypse"
@@ -28,17 +38,25 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const session = await getSession();
 
-    const { user_id, canteen_id, rating, comments } = body;
+    if (!session) {
+      return NextResponse.json(
+        { message: "Please log in before submitting feedback." },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { canteen_id, rating, comments } = body;
 
     if (
-      !Number.isInteger(user_id) ||
       !Number.isInteger(canteen_id) ||
       !Number.isInteger(rating) ||
       rating < 1 ||
       rating > 5 ||
-      (comments !== undefined && typeof comments !== "string")
+      (comments !== undefined && typeof comments !== "string") ||
+      (typeof comments === "string" && comments.length > 1000)
     ) {
       return NextResponse.json(
         { message: "Invalid feedback details." },
@@ -52,7 +70,7 @@ export async function POST(request: NextRequest) {
     );
 
     const result = await db.collection("feedback").insertOne({
-      user_id,
+      user_id: session.userId,
       canteen_id,
       rating,
       comments: comments?.trim() || "",
@@ -76,7 +94,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-/*
-It provides GET and POST endpoints for MongoDB feedback. Students can submit a 1–5 star rating 
-with comments, and the API stores and retrieves feedback
-*/

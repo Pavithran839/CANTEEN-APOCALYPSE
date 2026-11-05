@@ -1,10 +1,20 @@
-
 import { NextResponse } from "next/server";
 import pool from "@/lib/mysql";
+import { getSession } from "@/lib/auth";
 
 // GET: Retrieve all alerts
 export async function GET() {
   try {
+    // Verify login session
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { message: "Please log in to view alerts." },
+        { status: 401 }
+      );
+    }
+
     const [alerts] = await pool.query(
       `SELECT
         alert_id,
