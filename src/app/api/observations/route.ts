@@ -3,10 +3,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import pool from "@/lib/mysql";
 import { calculateChaosScore } from "@/lib/chaos-score";
+import { getSession } from "@/lib/auth";
 
 // GET: Retrieve all crowd observations
 export async function GET() {
   try {
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { message: "Please log in to view observations." },
+        { status: 401 }
+      );
+    }
+
     const [observations] = await pool.query(
       `SELECT
         observation_id,
@@ -27,7 +37,7 @@ export async function GET() {
     console.error("Error fetching observations:", error);
 
     return NextResponse.json(
-      { message: "Failed to fetch observations" },
+      { message: "Failed to fetch observations." },
       { status: 500 }
     );
   }
@@ -36,12 +46,22 @@ export async function GET() {
 // POST: Submit a new crowd observation
 export async function POST(request: NextRequest) {
   try {
+    // Identify the logged-in student from the session
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { message: "Please log in before submitting a report." },
+        { status: 401 }
+      );
+    }
+
+    const reported_by = session.userId;
     const body = await request.json();
 
     const {
       canteen_id,
       counter_id,
-      reported_by,
       people_count,
       queue_length,
       wait_time_minutes,
@@ -50,11 +70,10 @@ export async function POST(request: NextRequest) {
     // Validate required IDs
     if (
       !Number.isInteger(canteen_id) ||
-      !Number.isInteger(reported_by) ||
       (counter_id != null && !Number.isInteger(counter_id))
     ) {
       return NextResponse.json(
-        { message: "Invalid canteen, counter, or user ID." },
+        { message: "Invalid canteen or counter ID." },
         { status: 400 }
       );
     }
@@ -89,19 +108,6 @@ export async function POST(request: NextRequest) {
 
     const capacity = Number(canteens[0].capacity);
 
-    // Verify reporting user
-    const [users] = await pool.query<RowDataPacket[]>(
-      "SELECT user_id FROM users WHERE user_id = ?",
-      [reported_by]
-    );
-
-    if (users.length === 0) {
-      return NextResponse.json(
-        { message: "Reporting user not found." },
-        { status: 404 }
-      );
-    }
-
     // Verify counter belongs to the selected canteen
     if (counter_id != null) {
       const [counters] = await pool.query<RowDataPacket[]>(
@@ -125,7 +131,7 @@ export async function POST(request: NextRequest) {
       capacity
     );
 
-    // Save observation in MySQL
+    // Save observation using the authenticated user's ID
     const [result] = await pool.execute<ResultSetHeader>(
       `INSERT INTO observations
         (canteen_id, counter_id, reported_by, people_count,
@@ -142,9 +148,7 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    
     // Generate an alert for serious crowd conditions
-    //This creates an alert automatically when the Chaos Score is 51 or higher. LOW and MODERATE observations won't generate alerts.
     if (chaosScore >= 51) {
       const severity = chaosScore >= 76 ? "CRITICAL" : "HIGH";
 
@@ -167,13 +171,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-
     return NextResponse.json(
       {
         status: "success",
         message: "Crowd observation submitted successfully.",
         data: {
           observation_id: result.insertId,
+          reported_by,
           chaos_score: chaosScore,
         },
       },
@@ -188,13 +192,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-//Accepts and saves crowd observation
-//This will allow the website to submit crowd reports 
-// and save them in MySQL.
-/*
-What we're adding:
-- Accepts crowd information through a POST request.
-- Checks whether the canteen, user and optional counter exist.
-- Calculates the Chaos Score using our existing function.
-- Saves the observation and calculated score in MySQL.
-*/

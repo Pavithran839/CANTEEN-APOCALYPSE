@@ -3,23 +3,27 @@
 
 import { useEffect, useState } from "react";
 
-interface User {
-  user_id: number;
-  name: string;
-}
-
 interface Canteen {
   canteen_id: number;
   name: string;
   capacity: number;
+  status: "ACTIVE" | "INACTIVE";
+}
+
+interface Counter {
+  counter_id: number;
+  canteen_id: number;
+  counter_name: string;
+  service_type: string;
+  status: "OPEN" | "CLOSED";
 }
 
 export default function ObservationForm() {
-  const [users, setUsers] = useState<User[]>([]);
   const [canteens, setCanteens] = useState<Canteen[]>([]);
+  const [counters, setCounters] = useState<Counter[]>([]);
 
-  const [reportedBy, setReportedBy] = useState("");
   const [canteenId, setCanteenId] = useState("");
+  const [counterId, setCounterId] = useState("");
   const [peopleCount, setPeopleCount] = useState("");
   const [queueLength, setQueueLength] = useState("");
   const [waitTime, setWaitTime] = useState("");
@@ -28,35 +32,38 @@ export default function ObservationForm() {
   const [score, setScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Load students and canteens
-  
-useEffect(() => {
-  async function loadData() {
-    try {
-      // Load students from our working API
-      const usersResponse = await fetch("/api/users");
+  // Load canteens and counters
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [canteensResponse, countersResponse] = await Promise.all([
+          fetch("/api/canteens"),
+          fetch("/api/counters"),
+        ]);
 
-      if (!usersResponse.ok) {
-        throw new Error("Unable to load students.");
+        if (!canteensResponse.ok || !countersResponse.ok) {
+          throw new Error("Unable to load form information.");
+        }
+
+        const canteensData = await canteensResponse.json();
+        const countersData = await countersResponse.json();
+
+        setCanteens(canteensData);
+        setCounters(countersData);
+      } catch (error) {
+        setMessage((error as Error).message);
       }
-
-      const usersData = await usersResponse.json();
-      setUsers(usersData);
-
-      // Temporary demo canteen data
-      // Replace with Person 1's API when it is ready
-      setCanteens([
-        { canteen_id: 1, name: "Main Canteen", capacity: 100 },
-        { canteen_id: 2, name: "Food Court", capacity: 150 },
-        { canteen_id: 3, name: "North Canteen", capacity: 80 },
-      ]);
-    } catch (error) {
-      setMessage((error as Error).message);
     }
-  }
 
-  loadData();
-}, []);
+    loadData();
+  }, []);
+
+  // Get open counters belonging to the selected canteen
+  const availableCounters = counters.filter(
+    (counter) =>
+      counter.canteen_id === Number(canteenId) &&
+      counter.status === "OPEN"
+  );
 
   // Submit crowd report
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -74,8 +81,7 @@ useEffect(() => {
         },
         body: JSON.stringify({
           canteen_id: Number(canteenId),
-          counter_id: null,
-          reported_by: Number(reportedBy),
+          counter_id: Number(counterId),
           people_count: Number(peopleCount),
           queue_length: Number(queueLength),
           wait_time_minutes: Number(waitTime),
@@ -91,6 +97,7 @@ useEffect(() => {
       setMessage("Crowd report submitted successfully!");
       setScore(Number(result.data.chaos_score));
 
+      setCounterId("");
       setPeopleCount("");
       setQueueLength("");
       setWaitTime("");
@@ -121,19 +128,23 @@ useEffect(() => {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="mb-2 block font-medium text-gray-700">
-            Select Student
+            Select Canteen
           </label>
 
           <select
             required
-            value={reportedBy}
-            onChange={(e) => setReportedBy(e.target.value)}
+            value={canteenId}
+            onChange={(e) => {
+              setCanteenId(e.target.value);
+              setCounterId("");
+            }}
             className="w-full rounded-lg border border-gray-300 p-3"
           >
-            <option value="">Choose your account</option>
-            {users.map((user) => (
-              <option key={user.user_id} value={user.user_id}>
-                {user.name}
+            <option value="">Choose a canteen</option>
+
+            {canteens.map((canteen) => (
+              <option key={canteen.canteen_id} value={canteen.canteen_id}>
+                {canteen.name} (Capacity: {canteen.capacity})
               </option>
             ))}
           </select>
@@ -141,19 +152,27 @@ useEffect(() => {
 
         <div>
           <label className="mb-2 block font-medium text-gray-700">
-            Select Canteen
+            Select Counter
           </label>
 
           <select
             required
-            value={canteenId}
-            onChange={(e) => setCanteenId(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 p-3"
+            value={counterId}
+            onChange={(e) => setCounterId(e.target.value)}
+            disabled={!canteenId || availableCounters.length === 0}
+            className="w-full rounded-lg border border-gray-300 p-3 disabled:bg-gray-100"
           >
-            <option value="">Choose a canteen</option>
-            {canteens.map((canteen) => (
-              <option key={canteen.canteen_id} value={canteen.canteen_id}>
-                {canteen.name} (Capacity: {canteen.capacity})
+            <option value="">
+              {!canteenId
+                ? "Select a canteen first"
+                : availableCounters.length === 0
+                  ? "No open counters available"
+                  : "Choose a counter"}
+            </option>
+
+            {availableCounters.map((counter) => (
+              <option key={counter.counter_id} value={counter.counter_id}>
+                {counter.counter_name} ({counter.service_type})
               </option>
             ))}
           </select>
@@ -209,7 +228,7 @@ useEffect(() => {
 
         <button
           type="submit"
-          disabled={loading || users.length === 0 || canteens.length === 0}
+          disabled={loading || canteens.length === 0 || !counterId}
           className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? "Submitting..." : "Submit Crowd Report"}
