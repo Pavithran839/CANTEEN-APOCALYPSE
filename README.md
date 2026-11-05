@@ -1,36 +1,138 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Canteen Apocalypse 🍽️
 
-## Getting Started
+A real-time canteen crowd monitoring and notification system that helps students make informed decisions about when to visit campus canteens.
 
-First, run the development server:
+## 📌 Project Overview
+
+Canteen Apocalypse monitors crowd conditions through student-submitted reports. It calculates a **Chaos Score** based on people count, queue length, and waiting time, classifies the crowd level, and provides suitable notifications.
+
+The application provides separate dashboards and access permissions for students and administrators.
+
+## ✨ Features
+
+- **Crowd Reporting:** Students can submit crowd observations.
+- **Chaos Score:** Calculates congestion using a weighted formula.
+- **Crowd Classification:** Categorizes conditions as LOW, MODERATE, HIGH, or CRITICAL.
+- **Notifications:** Provides crowd updates and recommendations.
+- **Analytics Dashboard:** Displays canteen crowd statistics.
+- **Role-Based Access:** Separate permissions for STUDENT and ADMIN.
+- **Feedback System:** Allows students to submit feedback.
+- **Alert Management:** Updates existing active alerts to prevent repeated notifications for unchanged crowd levels.
+
+## 🛠️ Tech Stack
+
+| Technology | Purpose |
+|---|---|
+| Next.js | Frontend and backend |
+| TypeScript | Application logic |
+| Tailwind CSS | UI styling |
+| MySQL | Relational database |
+| MongoDB | Feedback storage |
+| Node.js | Runtime environment |
+| JWT & bcryptjs | Authentication and password security |
+
+## 🧮 Chaos Score
+
+The Chaos Score considers three parameters:
+
+- People count – 40%
+- Queue length – 30%
+- Waiting time – 30%
+
+Each parameter is normalized against canteen capacity or a 60-minute waiting-time reference and capped at 100.
+
+| Score | Crowd Level |
+|---|---|
+| 0–25 | LOW |
+| 26–50 | MODERATE |
+| 51–75 | HIGH |
+| 76–100 | CRITICAL |
+
+## 🗄️ Database Concepts
+
+### SQL – MySQL
+Stores structured information such as users, canteens, counters, observations, and alerts.
+
+### NoSQL – MongoDB
+Stores student feedback in a flexible document-based format.
+
+### Advanced SQL
+- **Transactions:** Maintain consistency while inserting observations and managing alerts.
+- **Views:** `canteen_daily_summary` provides aggregated daily canteen statistics.
+- **Stored Procedures:** `sp_canteen_analytics` and `sp_get_canteen_alerts` retrieve analytics and alert information.
+- **Triggers:** `trg_calculate_chaos_score` automatically calculates the Chaos Score before an observation is inserted.
+
+## 📂 Project Structure
+
+```text
+canteen-apocalypse-project/
+├── src/
+│   └── app/
+│       ├── alerts/
+│       ├── analytics/
+│       ├── api/
+│       ├── feedback/
+│       ├── login/
+│       ├── report/
+│       └── ...
+├── public/
+├── .env.local
+├── package.json
+└── README.md
+```
+
+## ⚙️ Installation and Setup
+
+**1. Clone the repository**
+
+```bash
+git clone https://github.com/Pavithran839/CANTEEN-APOCALYPSE.git
+```
+
+**2. Navigate to the project**
+
+```bash
+cd canteen-apocalypse-project
+```
+
+**3. Install dependencies**
+
+```bash
+npm install
+```
+
+**4. Configure environment variables**
+
+Create a `.env.local` file with the required MySQL, MongoDB, and authentication credentials.
+
+**5. Set up the databases**
+
+- Create the MySQL database `canteen_apocalypse` and configure its tables.
+- Ensure MongoDB is running and accessible to the application.
+
+**6. Start the development server**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 👥 User Roles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Student | Administrator |
+|---|---|
+| Submit crowd reports | View crowd analytics |
+| View analytics | View notifications |
+| Receive crowd notifications | Monitor crowd conditions |
+| Submit feedback | Access administrative features |
 
-## Learn More
+## 🎯 Project Objective
 
-To learn more about Next.js, take a look at the following resources:
+To reduce uncertainty and waiting time in campus canteens through real-time crowd reporting, data-driven congestion analysis, and timely notifications.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Course:** Database Management Systems (DBMS)  
+**Project:** Canteen Apocalypse  
+**Repository:** [GitHub – Canteen Apocalypse](https://github.com/Pavithran839/CANTEEN-APOCALYPSE)
