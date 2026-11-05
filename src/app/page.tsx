@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 
-const modules = [
+const studentModules = [
   {
     title: "Crowd Reporting",
     description: "Report current crowd levels, queue length and waiting time.",
@@ -34,12 +34,32 @@ const modules = [
   },
 ];
 
+const adminModules = [
+  {
+    title: "Analytics",
+    description: "Monitor crowd statistics across all canteens.",
+    icon: "📈",
+    href: "/analytics",
+    color: "bg-purple-100",
+  },
+  {
+    title: "Notifications",
+    description: "Monitor crowd alerts and congestion levels across canteens.",
+    icon: "🔔",
+    href: "/alerts",
+    color: "bg-green-100",
+  },
+];
+
 export default async function Home() {
   const session = await getSession();
 
   if (!session) {
     redirect("/login");
   }
+
+  const isAdmin = session.role === "ADMIN";
+  const modules = isAdmin ? adminModules : studentModules;
 
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-12 text-gray-900">
@@ -50,18 +70,19 @@ export default async function Home() {
           </p>
 
           <h1 className="mt-3 text-4xl font-bold">
-            Student Dashboard
+            {isAdmin ? "Admin Dashboard" : "Student Dashboard"}
           </h1>
 
           <p className="mt-3 text-gray-600">
-            Welcome, {session.name}! Stay informed about campus canteen
-            crowd conditions and make smarter dining decisions.
+            {isAdmin
+              ? `Welcome, ${session.name}! Monitor crowd conditions and congestion across all campus canteens.`
+              : `Welcome, ${session.name}! Stay informed about campus canteen crowd conditions and make smarter dining decisions.`}
           </p>
         </header>
 
         <section>
           <h2 className="mb-6 text-2xl font-bold">
-            Explore Services
+            {isAdmin ? "Administration" : "Explore Services"}
           </h2>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

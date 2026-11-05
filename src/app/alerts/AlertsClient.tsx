@@ -50,6 +50,10 @@ export default function AlertsClient() {
     }
   }
 
+  function displaySeverity(severity: string) {
+    return severity === "MEDIUM" ? "MODERATE" : severity;
+  }
+
   return (
     <main className="min-h-screen bg-gray-100 p-8">
       <div className="mx-auto max-w-5xl">
@@ -87,7 +91,7 @@ export default function AlertsClient() {
                 <span
                   className={`rounded-full px-3 py-1 text-sm font-bold ${severityStyle(alert.severity)}`}
                 >
-                  {alert.severity}
+                  {displaySeverity(alert.severity)}
                 </span>
               </div>
 

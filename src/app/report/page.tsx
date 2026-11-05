@@ -1,3 +1,4 @@
+
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import ObservationForm from "@/components/observations/ObservationForm";
@@ -7,6 +8,10 @@ export default async function ReportPage() {
 
   if (!session) {
     redirect("/login");
+  }
+
+  if (session.role !== "STUDENT") {
+    redirect("/");
   }
 
   return (

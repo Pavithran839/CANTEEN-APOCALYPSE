@@ -13,6 +13,12 @@ export async function GET() {
         { status: 401 }
       );
     }
+    if (session.role !== "STUDENT") {
+  return NextResponse.json(
+    { message: "Only students can submit feedback." },
+    { status: 403 }
+  );
+}
 
     const client = await clientPromise;
     const db = client.db(
@@ -46,6 +52,13 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+    if (session.role !== "STUDENT") {
+  return NextResponse.json(
+    { message: "Only students can submit feedback." },
+    { status: 403 }
+  );
+}
+    
 
     const body = await request.json();
     const { canteen_id, rating, comments } = body;

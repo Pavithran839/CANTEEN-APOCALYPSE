@@ -10,5 +10,9 @@ export default async function FeedbackPage() {
     redirect("/login");
   }
 
+  if (session.role !== "STUDENT") {
+    redirect("/");
+  }
+
   return <FeedbackClient />;
 }

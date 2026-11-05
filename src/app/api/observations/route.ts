@@ -43,10 +43,10 @@ export async function GET() {
   }
 }
 
-// POST: Submit a new crowd observation
+// POST: Submit a new crowd observation and update its notification
 export async function POST(request: NextRequest) {
   try {
-    // Identify the logged-in student from the session
+    // Identify the logged-in student
     const session = await getSession();
 
     if (!session) {
@@ -55,6 +55,12 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+    if (session.role !== "STUDENT") {
+  return NextResponse.json(
+    { message: "Only students can submit crowd reports." },
+    { status: 403 }
+  );
+}
 
     const reported_by = session.userId;
     const body = await request.json();
@@ -67,7 +73,7 @@ export async function POST(request: NextRequest) {
       wait_time_minutes,
     } = body;
 
-    // Validate required IDs
+    // Validate IDs
     if (
       !Number.isInteger(canteen_id) ||
       (counter_id != null && !Number.isInteger(counter_id))
@@ -111,7 +117,8 @@ export async function POST(request: NextRequest) {
     // Verify counter belongs to the selected canteen
     if (counter_id != null) {
       const [counters] = await pool.query<RowDataPacket[]>(
-        "SELECT counter_id FROM counters WHERE counter_id = ? AND canteen_id = ?",
+        `SELECT counter_id FROM counters
+         WHERE counter_id = ? AND canteen_id = ?`,
         [counter_id, canteen_id]
       );
 
@@ -131,58 +138,139 @@ export async function POST(request: NextRequest) {
       capacity
     );
 
-    // Save observation using the authenticated user's ID
-    const [result] = await pool.execute<ResultSetHeader>(
-      `INSERT INTO observations
-        (canteen_id, counter_id, reported_by, people_count,
-         queue_length, wait_time_minutes, chaos_score)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        canteen_id,
-        counter_id ?? null,
-        reported_by,
-        people_count,
-        queue_length,
-        wait_time_minutes,
-        chaosScore,
-      ]
-    );
+    // Determine notification severity and message
+    let severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+    let message: string;
 
-    // Generate an alert for serious crowd conditions
-    if (chaosScore >= 51) {
-      const severity = chaosScore >= 76 ? "CRITICAL" : "HIGH";
+   if (chaosScore <= 25) {
+  severity = "LOW";
+  message =
+    "Good news! This canteen is currently not crowded. You can visit now.";
+} else if (chaosScore <= 50) {
+  severity = "MEDIUM";
+  message =
+    "This canteen has a moderate crowd. You can visit, but expect some waiting.";
+} else if (chaosScore <= 75) {
+  severity = "HIGH";
+  message =
+    "This canteen is very crowded. We recommend visiting another canteen to avoid long waiting times.";
+} else {
+  severity = "CRITICAL";
+  message =
+    "This canteen is extremely crowded. Please avoid visiting it for now and choose another canteen.";
+}
 
-      const message =
-        severity === "CRITICAL"
-          ? "Critical crowd congestion detected! Immediate attention required."
-          : "High crowd congestion detected. Please monitor the canteen.";
+    // Start transaction
+    const connection = await pool.getConnection();
 
-      await pool.execute(
-        `INSERT INTO alerts
-          (canteen_id, observation_id, alert_type, severity, message)
-         VALUES (?, ?, ?, ?, ?)`,
+    try {
+      await connection.beginTransaction();
+
+      // Lock the canteen to prevent simultaneous duplicate notifications
+      await connection.query(
+        `SELECT canteen_id
+         FROM canteens
+         WHERE canteen_id = ?
+         FOR UPDATE`,
+        [canteen_id]
+      );
+
+      // Insert the crowd observation
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO observations
+          (canteen_id, counter_id, reported_by, people_count,
+           queue_length, wait_time_minutes, chaos_score)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           canteen_id,
-          result.insertId,
-          "CROWD_CONGESTION",
-          severity,
-          message,
+          counter_id ?? null,
+          reported_by,
+          people_count,
+          queue_length,
+          wait_time_minutes,
+          chaosScore,
         ]
       );
-    }
 
-    return NextResponse.json(
-      {
-        status: "success",
-        message: "Crowd observation submitted successfully.",
-        data: {
-          observation_id: result.insertId,
-          reported_by,
-          chaos_score: chaosScore,
+      // Find existing active crowd notifications
+      const [activeAlerts] = await connection.query<RowDataPacket[]>(
+        `SELECT alert_id
+         FROM alerts
+         WHERE canteen_id = ?
+           AND alert_type = 'CROWD_CONGESTION'
+           AND is_resolved = 0
+         ORDER BY created_at DESC, alert_id DESC
+         FOR UPDATE`,
+        [canteen_id]
+      );
+
+      if (activeAlerts.length > 0) {
+        // Update the latest existing active notification
+        const existingAlertId = activeAlerts[0].alert_id;
+
+        await connection.execute(
+          `UPDATE alerts
+           SET observation_id = ?,
+               severity = ?,
+               message = ?,
+               is_resolved = 0
+           WHERE alert_id = ?`,
+          [
+            result.insertId,
+            severity,
+            message,
+            existingAlertId,
+          ]
+        );
+
+        // Resolve older duplicate active notifications
+        await connection.execute(
+          `UPDATE alerts
+           SET is_resolved = 1
+           WHERE canteen_id = ?
+             AND alert_type = 'CROWD_CONGESTION'
+             AND is_resolved = 0
+             AND alert_id != ?`,
+          [canteen_id, existingAlertId]
+        );
+      } else {
+        // Create a notification if none is currently active
+        await connection.execute(
+          `INSERT INTO alerts
+            (canteen_id, observation_id, alert_type, severity, message)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            canteen_id,
+            result.insertId,
+            "CROWD_CONGESTION",
+            severity,
+            message,
+          ]
+        );
+      }
+
+      await connection.commit();
+
+      return NextResponse.json(
+        {
+          status: "success",
+          message: "Crowd observation and notification updated successfully.",
+          data: {
+            observation_id: result.insertId,
+            reported_by,
+            chaos_score: chaosScore,
+            severity:
+              severity === "MEDIUM" ? "MODERATE" : severity,
+          },
         },
-      },
-      { status: 201 }
-    );
+        { status: 201 }
+      );
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error("Error submitting observation:", error);
 
