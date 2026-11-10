@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import LogoutButton from "@/components/logout-button";
 
 const studentModules = [
   {
@@ -64,21 +65,25 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-12 text-gray-900">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-12">
-          <p className="font-semibold tracking-wider text-blue-600">
-            CANTEEN APOCALYPSE
-          </p>
+        <header className="mb-12 flex items-start justify-between gap-4">
+  <div>
+    <p className="font-semibold tracking-wider text-blue-600">
+      CANTEEN APOCALYPSE
+    </p>
 
-          <h1 className="mt-3 text-4xl font-bold">
-            {isAdmin ? "Admin Dashboard" : "Student Dashboard"}
-          </h1>
+    <h1 className="mt-3 text-4xl font-bold">
+      {isAdmin ? "Admin Dashboard" : "Student Dashboard"}
+    </h1>
 
-          <p className="mt-3 text-gray-600">
-            {isAdmin
-              ? `Welcome, ${session.name}! Monitor crowd conditions and congestion across all campus canteens.`
-              : `Welcome, ${session.name}! Stay informed about campus canteen crowd conditions and make smarter dining decisions.`}
-          </p>
-        </header>
+    <p className="mt-3 text-gray-600">
+      {isAdmin
+        ? `Welcome, ${session.name}! Monitor crowd conditions and congestion across all campus canteens.`
+        : `Welcome, ${session.name}! Stay informed about campus canteen crowd conditions and make smarter dining decisions.`}
+    </p>
+  </div>
+
+  <LogoutButton />
+</header>
 
         <section>
           <h2 className="mb-6 text-2xl font-bold">
